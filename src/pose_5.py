@@ -91,21 +91,37 @@ def minimize_marginals(graph, initial_estimate, pose_options):
     return best_pose, best_landmark, sum_of_marginals[ind_best]
 
 
-def minimize_errors(graph, initial_estimate, pose_options):
+def minimize_errors(graph_copy_no_X4, initial_estimate, pose_options):
+    
     ind_best_pose = ["a", "b", "c", "d"]
-    #TODO: try different pose and landmark options here, and keep the one with the lowest sum of marginals.
-    for i in len(pose_options):
-        for j in range(1,2):
-            best_pose = ind_best_pose(i)     # chosen pose option
+    min_error = float("inf")
+    best_pose_copy = [None, None]
+    best_pose = None
+    best_landmark = None
+    values_of_x = [0, 2, 4]
+
+    for i in range(len(pose_options)):
+        for j in [1,2]:
+            graph_copy = gtsam.NonlinearFactorGraph(graph_copy_no_X4)
+            estimate = gtsam.Values(initial_estimate)
+            
+            best_pose = ind_best_pose[i]      # chosen pose option
             best_landmark = j    # chosen landmark (1 or 2)
             pose_5 = pose_options[best_pose]
-            graph, initial_estimate = add_pose(graph, initial_estimate, pose_5)
-            result = optimize(graph, initial_estimate)
-            graph = add_landmark_measurement(graph, result, pose_5, best_landmark)
-            result = optimize(graph, initial_estimate)
+            graph_copy, estimate = add_pose(graph_copy, estimate, pose_5)
+            result = optimize(graph_copy, estimate)
+            graph_copy = add_landmark_measurement(graph_copy, result, pose_5, j)
+            result = optimize(graph_copy, estimate)
 
-    # TODO: create a list of errors (each index corresponds to a pose) and add the error of each pose to the list
-    list_of_errors = []
-    # TODO: compute the sum of the errors and return it along with the best pose and landmark
-    sum_of_errors = 0
-    return best_pose, best_landmark, sum_of_errors 
+            total_error = sum(abs(result.atPose2(X(i)).x() - true)
+                + abs(result.atPose2(X(i)).y())
+                + abs(result.atPose2(X(i)).theta())
+                for i, true in zip([1, 2, 3], values_of_x)
+                )
+
+            if total_error < min_error:
+                min_error = total_error
+                best_pose = i
+                best_landmark = j
+
+    return best_pose, best_landmark, min_error
